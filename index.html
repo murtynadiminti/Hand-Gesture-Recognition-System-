@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Real-Time Touchless Drawing Recognition</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<style>
+body {
+    text-align: center;
+    font-family: Arial;
+    background: #f0f0f0;
+}
+canvas {
+    border: 2px solid black;
+}
+#output {
+    font-size: 40px;
+    margin-top: 15px;
+    color: darkblue;
+}
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Touchless Drawing Recognition System</h2>
+
+<video id="video" width="640" height="480" style="display:none"></video>
+<canvas id="canvas" width="640" height="480"></canvas>
+
+<br>
+<button onclick="clearCanvas()">Clear</button>
+<button onclick="recognize()">Recognize</button>
+
+<div id="output">Recognized Letter: </div>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const output = document.getElementById('output');
+
+let drawingPoints = [];
+
+// Start Webcam
+navigator.mediaDevices.getUserMedia({ video: true })
+.then(stream => {
+    video.srcObject = stream;
+});
+
+// Initialize MediaPipe
+const hands = new Hands({
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+    maxNumHands: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
+});
+
+hands.onResults(results => {
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        const indexTip = landmarks[8];
+
+        const x = indexTip.x * canvas.width;
+        const y = indexTip.y * canvas.height;
+
+        drawingPoints.push({x,y});
+
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 2*Math.PI);
+        ctx.fill();
+
+        if(drawingPoints.length > 1){
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(
+                drawingPoints[drawingPoints.length-2].x,
+                drawingPoints[drawingPoints.length-2].y
+            );
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+    }
+});
+
+// Camera loop
+const camera = new Camera(video, {
+    onFrame: async () => {
+        await hands.send({image: video});
+    },
+    width: 640,
+    height: 480
+});
+camera.start();
+
+// Clear canvas
+function clearCanvas(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawingPoints = [];
+    output.innerText = "Recognized Letter: ";
+}
+
+// SIMPLE AI Recognition (Demo Version)
+function recognize(){
+
+    if(drawingPoints.length < 20){
+        output.innerText = "Draw Properly!";
+        return;
+    }
+
+    let minX = Math.min(...drawingPoints.map(p=>p.x));
+    let maxX = Math.max(...drawingPoints.map(p=>p.x));
+    let minY = Math.min(...drawingPoints.map(p=>p.y));
+    let maxY = Math.max(...drawingPoints.map(p=>p.y));
+
+    let width = maxX - minX;
+    let height = maxY - minY;
+
+    // Basic rule-based classification
+    if(height > width * 1.5){
+        output.innerText = "Recognized Letter: I";
+    }
+    else if(width > height * 1.5){
+        output.innerText = "Recognized Letter: —";
+    }
+    else{
+        output.innerText = "Recognized Letter: O";
+    }
+}
+
+</script>
+</body>
+</html>
